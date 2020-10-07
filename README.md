@@ -304,15 +304,10 @@ demo=# SELECT '05-18-2016'::date;
 ------------
  2016-05-18
 (1 row)
-demo=# show datestyle;
- DateStyle
------------
- ISO, MDY
-(1 row)
 
 demo=# SET datestyle TO 'Postgres, DMY';
 SET
-Time: 0.619 ms
+
 demo=# show datestyle;
    DateStyle
 ---------------
