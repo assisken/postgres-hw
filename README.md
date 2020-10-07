@@ -293,16 +293,23 @@ LINE 1: SELECT '18-05-2016'::date;
                ^
 HINT:  Perhaps you need a different "datestyle" setting.
 
+demo=# SELECT '05-18-2016'::date;
+    date    
+------------
+ 2016-05-18
+(1 row)
+
+demo=# SELECT '05-18-2016'::date;
+    date    
+------------
+ 2016-05-18
+(1 row)
 demo=# show datestyle;
  DateStyle
 -----------
  ISO, MDY
 (1 row)
-```
 
-Смена конфига `DateStyle` не работает в PostgreSQL 12.4. =(
-
-```sql
 demo=# SET datestyle TO 'Postgres, DMY';
 SET
 Time: 0.619 ms
