@@ -551,6 +551,152 @@ demo=# SELECT '{"sports": "хоккей"}'::jsonb ? 'sports';
 
 ### Работа
 
+#### Упражнение 2
+
+Посмотрите, какие ограничения уже наложены на атрибуты таблицы «Успеваемость» (progress).
+В качестве примера рассмотрим такой вариант. Добавьте в таблицу progress еще один атрибут — «Форма проверки знаний» (test_form), который может принимать только два значения: «экзамен» или «зачет». Тогда набор допустимых значений атрибута «Оценка» (mark) будет зависеть от того, экзамен или зачет предусмотрены по данной дисциплине. Если предусмотрен экзамен, тогда допускаются значения 3, 4, 5, если зачет — тогда 0 (не зачтено) или 1 (зачтено).
+
+```sql
+                                Таблица "public.progress"
+   Столбец   |         Тип          | Правило сортировки | Допустимость NULL | По умолчанию
+-------------+----------------------+--------------------+-------------------+------
+ record_book | numeric(5,0)         |                    | not null          |
+ subject     | text                 |                    | not null          |
+ acad_year   | text                 |                    | not null          |
+ term        | numeric(1,0)         |                    | not null          |
+ mark        | numeric(1,0)         |                    | not null          | 5
+ test_form   | character varying(7) |                    |                   |
+Ограничения-проверки:
+    "progress_mark_check" CHECK (mark >= 3::numeric AND mark <= 5::numeric)
+    "progress_term_check" CHECK (term = 1::numeric OR term = 2::numeric)
+
+edu=# ALTER TABLE progress ADD test_form VARCHAR(7);
+ALTER TABLE
+
+edu=# ALTER TABLE progress ADD CHECK (test_form IN ('зачет','экзамен'));
+ALTER TABLE
+```
+
+Проверьте, как будет работать новое ограничение в модифицированной таблице progress. Для этого выполните команды INSERT, как удовлетворяющие ограничению, так и нарушающие его.
+
+```sql
+edu=# INSERT INTO students VALUES (7, 'student 1', 658, 7685);
+INSERT 0 1
+edu=# INSERT INTO progress VALUES (4, 'Mathematics', '2',2, 4, 'экзамен');
+INSERT 0 1
+edu=# INSERT INTO progress VALUES (4, 'Mathematics', '2',2, 0, 'зачет');
+ОШИБКА: новая строка в отношении “progress” нарушает ограничение-проверку "progress_mark_check"
+ПОДРОБНОСТИ: Ошибочная строка содержит (4, 'Mathematics', '2',2, 0, 'зачет').
+```
+
+В таблице уже было ограничение на допустимые значения атрибута mark. Как вы думаете, не будет ли оно конфликтовать с новым ограничением? Проверьте эту гипотезу. Если ограничения конфликтуют, тогда удалите старое ограничение и снова попробуйте добавить строки в таблицу.
+
+Они конфликтуют, в таком случае удалим ограничение, и попробуем добавить строки снова.
+
+```sql
+edu=# ALTER TABLE progress DROP CONSTRAINT progress_mark_check;
+edu=# INSERT INTO progress VALUES (4, 'Mathematics', '2',2, 0, 'зачет');
+
+INSERT 0 1
+```
+
+#### Упражнение 9
+
+В таблице «Студенты» (students) есть текстовый атрибут name, на который наложено ограничение NOT NULL. Как вы думаете, что будет, если при вводе новой строки в эту таблицу дать атрибуту name в качестве значения пустую строку?
+
+```sql
+edu=# INSERT INTO students VALUES (2, '', 979, 74673);
+INSERT 0 1
+```
+
+Добавим ограничение ( name <> '' )
+
+```sql
+edu=# ALTER TABLE students ADD CHECK ( name <> '' );
+ALTER TABLE
+edu=# INSERT INTO students VALUES (3, '', 979, 74673);
+ОШИБКА: новая строка в отношении “progress” нарушает ограничение-проверку
+"students_name_check"
+```
+
+Посмотрим что теперь будет при вставке строки с пустым значением
+
+```sql
+edu=# INSERT INTO students VALUES (3, ' ', 979, 74673);
+INSERT 0 1
+```
+
+Добавим ограничение ( trim (name) <> '' )
+
+```sql
+edu=# ALTER TABLE students ADD CHECK (trim (name) <> '');
+ALTER TABLE
+edu=# INSERT INTO students VALUES (3, ' ', 979, 74673);
+ОШИБКА: новая строка в отношении “progress” нарушает ограничение-проверку
+"students_name_check"
+```
+
+Есть ли подобные слабые места в таблице «Успеваемость» (progress)?
+- Есть, с поля с текстовым типом могут быть вставлены пустые строки.
+
+#### Упражнение 17
+
+Подумайте, какие представления было бы целесообразно создать для нашей базы данных «Авиаперевозки». Необходимо учесть наличие различных групп пользователей, например: пилоты, диспетчеры, пассажиры, кассиры. Создайте представления и проверьте их в работе.
+
+Диспетчер
+
+```sql
+demo=# CREATE VIEW dispatcher_info AS SELECT
+demo-#  flight_no,
+demo-#  scheduled_departure,
+demo-#  status,
+demo-#  model,
+demo-#  range
+demo-# FROM flights f
+demo-# LEFT JOIN aircrafts a on f.aircraft_code = a.aircraft_code;
+CREATE VIEW
+demo=# SELECT * FROM  dispatcher_info;
+ flight_no |  scheduled_departure   |  status   |        model        | range
+-----------+------------------------+-----------+---------------------+-------
+ PG0405    | 2016-09-13 08:35:00+03 | Arrived   | Airbus A321-200     |  5600
+ PG0404    | 2016-10-03 18:05:00+03 | Arrived   | Airbus A321-200     |  5600
+ PG0405    | 2016-10-03 08:35:00+03 | Arrived   | Airbus A321-200     |  5600
+ PG0402    | 2016-11-07 11:25:00+03 | Scheduled | Airbus A321-200     |  5600
+ PG0405    | 2016-10-14 08:35:00+03 | On Time   | Airbus A321-200     |  5600
+ PG0404    | 2016-10-14 18:05:00+03 | Scheduled | Airbus A321-200     |  5600
+ PG0403    | 2016-10-14 10:25:00+03 | Delayed   | Airbus A321-200     |  5600
+ PG0402    | 2016-10-14 11:25:00+03 | On Time   | Airbus A321-200     |  5600
+ PG0405    | 2016-10-23 08:35:00+03 | Scheduled | Airbus A321-200     |  5600
+ PG0402    | 2016-10-21 11:25:00+03 | Scheduled | Airbus A321-200     |  5600
+ PG0403    | 2016-10-21 10:25:00+03 | Scheduled | Airbus A321-200     |  5600
+ PG0404    | 2016-10-21 18:05:00+03 | Scheduled | Airbus A321-200     |  5600
+ PG0405    | 2016-10-21 08:35:00+03 | Scheduled | Airbus A321-200     |  5600
+ PG0402    | 2016-10-04 11:25:00+03 | Arrived   | Airbus A321-200     |  5600
+ PG0402    | 2016-09-25 11:25:00+03 | Arrived   | Airbus A321-200     |  5600
+```
+
+#### Упражнение 18
+
+Подумайте, какие еще таблицы было бы целесообразно дополнить столбцами типа json/jsonb. Вспомните, что, например, в таблице «Билеты» (tickets) уже есть столбец такого типа — contact_data. Выполните модификации таблиц и измените в них одну-две строки для проверки правильности ваших решений.
+
+В таблицу bookings в качестве json поля можно добавить информамцию о периоде действия брони.
+
+```sql
+demo=# ALTER TABLE bookings ADD COLUMN booking_period jsonb;
+ALTER TABLE
+
+demo=# UPDATE bookings
+demo-# SET booking_period='{"booking_start": "06.10.2020", "booking_end": "16.10.2020"}'
+demo-# WHERE book_ref='000181';
+UPDATE 1
+
+demo=# SELECT * FROM bookings WHERE book_ref='000181';
+ book_ref |       book_date        | total_amount |   booking_period
+----------+------------------------+--------------+-------------------------------------------------------------
+ 000181   | 2016-10-08 12:28:00+03 |    131800.00 | {"booking_end": "16.10.2020", "booking_start": "06.10.2020"}
+(1 строка)
+```
+
 [Наверх](#ссылки)
 
 ---
