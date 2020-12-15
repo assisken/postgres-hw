@@ -574,10 +574,9 @@ demo=# SELECT '{"игры": {"компьютерные": ["dark","souls"], "сп
     "progress_mark_check" CHECK (mark >= 3::numeric AND mark <= 5::numeric)
     "progress_term_check" CHECK (term = 1::numeric OR term = 2::numeric)
 
-edu=# ALTER TABLE progress ADD test_form VARCHAR(7);
-ALTER TABLE
-
-edu=# ALTER TABLE progress ADD CHECK (test_form IN ('зачет','экзамен'));
+edu=# ALTER TABLE progress ADD CHECK
+edu(# (test_form='экзамен' and mark IN (2,3,4,5)) OR
+edu(# (test_form='зачет'   and mark IN (0,1)));
 ALTER TABLE
 ```
 
@@ -1355,6 +1354,137 @@ UPDATE aircrafts_tmp SET range = range + 200 WHERE aircraft_code = 'CR2';
 Глава 10 (упражнения 3, 6, 8)
 
 ### Работа
+
+#### Упражнение 3
+
+Самостоятельно выполните команду EXPLAIN для запроса, содержащего общее табличное выражение (CTE). Посмотрите, на каком уровне находится узел плана, отвечающий за это выражение, как он оформляется. Учтите, что общие табличные выражения всегда материализуются, т. е. вычисляются однократно и результат их вычисления сохраняется в памяти, а затем все последующие обращения в рамках запроса направляются уже к этому материализованному результату.
+
+```sql
+demo=# EXPLAIN WITH a AS
+demo-# (SELECT DISTINCT city FROM airports)
+demo-# SELECT count(*) FROM a AS a1 JOIN a AS a2 ON a1.city<>a2.city;
+                               QUERY PLAN
+-------------------------------------------------------------------------
+ Aggregate  (cost=262.11..262.12 rows=1 width=8)
+   CTE a
+     ->  HashAggregate  (cost=3.30..4.31 rows=101 width=17)
+           Group Key: airports.city
+           ->  Seq Scan on airports  (cost=0.00..3.04 rows=104 width=17)
+   ->  Nested Loop  (cost=0.00..232.55 rows=10100 width=0)
+         Join Filter: (a1.city <> a2.city)
+         ->  CTE Scan on a a1  (cost=0.00..2.02 rows=101 width=32)
+         ->  CTE Scan on a a2  (cost=0.00..2.02 rows=101 width=32)
+(9 строк)
+```
+
+#### Упражнение 6
+
+Выполните команду EXPLAIN для запроса, в котором использована какая-нибудь из оконных функций. Найдите в плане выполнения запроса узел с именем WindowAgg. Попробуйте объяснить, почему он занимает именно этот уровень в плане.
+
+```sql
+demo=# SELECT book_ref, total_amount, avg(total_amount) OVER()
+demo-# FROM bookings ORDER BY 1 LIMIT 10;
+ book_ref | total_amount |        avg
+----------+--------------+--------------------
+ 00000F   |    265700.00 | 79025.605811528685
+ 000012   |     37900.00 | 79025.605811528685
+ 000068   |     18100.00 | 79025.605811528685
+ 000181   |    131800.00 | 79025.605811528685
+ 0002D8   |     23600.00 | 79025.605811528685
+ 0002DB   |    101500.00 | 79025.605811528685
+ 0002E0   |     89600.00 | 79025.605811528685
+ 0002F3   |     69600.00 | 79025.605811528685
+ 00034E   |     73300.00 | 79025.605811528685
+ 000352   |    109500.00 | 79025.605811528685
+(10 строк)
+
+
+demo=# EXPLAIN SELECT book_ref, total_amount, avg(total_amount) OVER()
+demo-# FROM bookings ORDER BY 1 LIMIT 10;
+                                            QUERY PLAN
+---------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..0.87 rows=10 width=45)
+   ->  WindowAgg  (cost=0.42..11796.09 rows=262788 width=45)
+         ->  Index Scan using bookings_pkey on bookings  (cost=0.42..8511.24 rows=262788 width=13)
+(3 строки)
+```
+
+#### Упражнение 8
+
+Замена коррелированного подзапроса соединением таблиц является одним из способов повышения производительности. Предположим, что мы задались вопросом: сколько маршрутов обслуживают самолеты каждого типа? При этом нужно учитывать, что может иметь место такая ситуация, когда самолеты какого-либо типа не обслуживают ни одного маршрута. Поэтому необходимо использовать не только представление «Маршруты» (routes), но и таблицу «Самолеты» (aircrafts). Это первый вариант запроса, в нем используется коррелированный подзапрос. 
+
+```sql
+demo=# EXPLAIN ANALYZE SELECT f.flight_id, avg(tf.amount)
+demo-# FROM flights_v f
+demo-# LEFT OUTER JOIN ticket_flights tf ON f.flight_id = tf.flight_id
+demo-# WHERE f.flight_id<100
+demo-# GROUP BY 1
+demo-# ORDER BY 1;
+                                                                           QUERY PLAN
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate  (cost=22132.61..22156.80 rows=97 width=36) (actual time=213.767..214.664 rows=99 loops=1)
+   Group Key: f.flight_id
+   ->  Sort  (cost=22132.61..22140.27 rows=3063 width=10) (actual time=213.734..213.912 rows=3988 loops=1)
+         Sort Key: f.flight_id
+         Sort Method: quicksort  Memory: 283kB
+         ->  Hash Join  (cost=20.88..21955.25 rows=3063 width=10) (actual time=1.362..212.614 rows=3988 loops=1)
+               Hash Cond: (f.arrival_airport = arr.airport_code)
+               ->  Hash Join  (cost=16.54..21942.55 rows=3063 width=14) (actual time=1.303..211.537 rows=3988 loops=1)
+                     Hash Cond: (f.departure_airport = dep.airport_code)
+                     ->  Hash Right Join  (cost=12.20..21929.85 rows=3063 width=18) (actual time=1.257..210.285 rows=3988 loops=1)
+                           Hash Cond: (tf.flight_id = f.flight_id)
+                           ->  Seq Scan on ticket_flights tf  (cost=0.00..19172.26 rows=1045726 width=10) (actual time=0.045..109.140 rows=1045726 loops=1)
+                           ->  Hash  (cost=10.99..10.99 rows=97 width=12) (actual time=0.061..0.062 rows=99 loops=1)
+                                 Buckets: 1024  Batches: 1  Memory Usage: 13kB
+                                 ->  Index Scan using flights_pkey on flights f  (cost=0.29..10.99 rows=97 width=12) (actual time=0.012..0.041 rows=99 loops=1)
+                                       Index Cond: (flight_id < 100)
+                     ->  Hash  (cost=3.04..3.04 rows=104 width=4) (actual time=0.037..0.038 rows=104 loops=1)
+                           Buckets: 1024  Batches: 1  Memory Usage: 12kB
+                           ->  Seq Scan on airports dep  (cost=0.00..3.04 rows=104 width=4) (actual time=0.006..0.017 rows=104 loops=1)
+               ->  Hash  (cost=3.04..3.04 rows=104 width=4) (actual time=0.050..0.051 rows=104 loops=1)
+                     Buckets: 1024  Batches: 1  Memory Usage: 12kB
+                     ->  Seq Scan on airports arr  (cost=0.00..3.04 rows=104 width=4) (actual time=0.013..0.026 rows=104 loops=1)
+ Planning Time: 1.548 ms
+ Execution Time: 214.862 ms
+(24 строки)
+```
+
+А в этом варианте коррелированный подзапрос раскрыт и заменен внешним соединением:
+
+```sql
+demo=# EXPLAIN ANALYZE SELECT f.flight_id, (SELECT avg(tf.amount)
+demo(# FROM ticket_flights tf
+demo(# WHERE f.flight_id = tf.flight_id)
+demo-# FROM flights_v f WHERE f.flight_id<100
+demo-# GROUP BY 1
+demo-# ORDER BY 1;
+                                                                     QUERY PLAN
+----------------------------------------------------------------------------------------------------------------------------------------------------
+ Group  (cost=0.57..2113389.87 rows=97 width=36) (actual time=122.058..12766.754 rows=99 loops=1)
+   Group Key: f.flight_id
+   ->  Nested Loop  (cost=0.57..73.67 rows=97 width=4) (actual time=0.056..3.468 rows=99 loops=1)
+         ->  Nested Loop  (cost=0.43..42.33 rows=97 width=8) (actual time=0.046..2.753 rows=99 loops=1)
+               ->  Index Scan using flights_pkey on flights f  (cost=0.29..10.99 rows=97 width=12) (actual time=0.011..0.385 rows=99 loops=1)
+                     Index Cond: (flight_id < 100)
+               ->  Index Only Scan using airports_pkey on airports dep  (cost=0.14..0.32 rows=1 width=4) (actual time=0.018..0.018 rows=1 loops=99)
+                     Index Cond: (airport_code = f.departure_airport)
+                     Heap Fetches: 99
+         ->  Index Only Scan using airports_pkey on airports arr  (cost=0.14..0.32 rows=1 width=4) (actual time=0.005..0.005 rows=1 loops=99)
+               Index Cond: (airport_code = f.arrival_airport)
+               Heap Fetches: 99
+   SubPlan 1
+     ->  Aggregate  (cost=21786.75..21786.76 rows=1 width=32) (actual time=128.915..128.915 rows=1 loops=99)
+           ->  Seq Scan on ticket_flights tf  (cost=0.00..21786.58 rows=70 width=6) (actual time=99.973..128.884 rows=40 loops=99)
+                 Filter: (f.flight_id = flight_id)
+                 Rows Removed by Filter: 1045686
+ Planning Time: 1.167 ms
+ Execution Time: 12810.241 ms
+(19 строк)
+```
+
+Исследуйте планы выполнения обоих запросов. Попытайтесь найти объяснение различиям в эффективности их выполнения. Чтобы получить усредненную картину, выполните каждый запрос несколько раз. 
+
+Предложите аналогичную пару запросов к базе данных «Авиаперевозки». Проведите необходимые эксперименты с вашими запросами.
 
 [Наверх](#ссылки)
 
