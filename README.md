@@ -1057,6 +1057,122 @@ ON f.city <> a2.city;
 
 ### Работа
 
+#### Упражнение 1
+
+Добавьте в определение таблицы aircrafts_log значение по умолчанию current_timestamp и соответствующим образом измените команды INSERT, приведенные в тексте главы.
+
+```sql
+demo=# CREATE TEMP TABLE aircrafts_log AS
+demo-# SELECT * FROM aircrafts WITH DATA;
+SELECT 9
+demo=# ALTER TABLE aircrafts_log
+demo-# ADD COLUMN log_timestamp TIMESTAMP DEFAULT (current_timestamp);
+ALTER TABLE
+demo=# SELECT * FROM aircrafts_log;
+ aircraft_code |        model        | range |       log_timestamp
+---------------+---------------------+-------+----------------------------
+ 773           | Boeing 777-300      | 11100 | 2020-12-06 23:06:36.980049
+ 763           | Boeing 767-300      |  7900 | 2020-12-06 23:06:36.980049
+ 320           | Airbus A320-200     |  5700 | 2020-12-06 23:06:36.980049
+ 321           | Airbus A321-200     |  5600 | 2020-12-06 23:06:36.980049
+ 319           | Airbus A319-100     |  6700 | 2020-12-06 23:06:36.980049
+ 733           | Boeing 737-300      |  4200 | 2020-12-06 23:06:36.980049
+ CN1           | Cessna 208 Caravan  |  1200 | 2020-12-06 23:06:36.980049
+ CR2           | Bombardier CRJ-200  |  2700 | 2020-12-06 23:06:36.980049
+ SU9           | Sukhoi SuperJet-100 |  6000 | 2020-12-06 23:06:36.980049
+(9 строк)
+
+demo=# TRUNCATE aircrafts_log;
+TRUNCATE TABLE
+demo=#
+demo=# WITH add_row AS
+demo-# ( INSERT INTO aircrafts_tmp
+demo(# SELECT * FROM aircrafts
+demo(# RETURNING *
+demo(# )
+demo-# INSERT INTO aircrafts_log
+demo-# SELECT add_row.aircraft_code, add_row.model, add_row.range
+demo-# FROM add_row;
+INSERT 0 9
+demo=#
+demo=# SELECT * FROM aircrafts_log;
+ aircraft_code |        model        | range |       log_timestamp
+---------------+---------------------+-------+----------------------------
+ 773           | Boeing 777-300      | 11100 | 2020-12-06 23:09:54.005097
+ 763           | Boeing 767-300      |  7900 | 2020-12-06 23:09:54.005097
+ 320           | Airbus A320-200     |  5700 | 2020-12-06 23:09:54.005097
+ 321           | Airbus A321-200     |  5600 | 2020-12-06 23:09:54.005097
+ 319           | Airbus A319-100     |  6700 | 2020-12-06 23:09:54.005097
+ 733           | Boeing 737-300      |  4200 | 2020-12-06 23:09:54.005097
+ CN1           | Cessna 208 Caravan  |  1200 | 2020-12-06 23:09:54.005097
+ CR2           | Bombardier CRJ-200  |  2700 | 2020-12-06 23:09:54.005097
+ SU9           | Sukhoi SuperJet-100 |  6000 | 2020-12-06 23:09:54.005097
+(9 строк)
+```
+
+#### Упражнение 2
+
+В предложении RETURNING можно указывать не только символ «∗», означающий выбор всех столбцов таблицы, но и более сложные выражения, сформированные на основе этих столбцов. В тексте главы мы копировали содержимое таблицы «Самолеты» в таблицу aircrafts_tmp, используя в предложении RETURNING именно «∗». Однако возможен и другой вариант запроса:
+
+```sql
+WITH add_row AS
+( INSERT INTO aircrafts_tmp
+SELECT * FROM aircrafts
+RETURNING aircraft_code, model, range,
+current_timestamp, 'INSERT'
+)
+INSERT INTO aircrafts_log
+SELECT ? FROM add_row;
+```
+
+Что нужно написать в этом запросе вместо вопросительного знака?
+
+- Можно написать «add_row.aircraft_code, add_row.model, add_row.range, current_timestamp, 'INSERT'»
+
+#### Упражнение 4
+
+В тексте главы в предложениях ON CONFLICT команды INSERT мы использовали только выражения, состоящие из имени одного столбца.
+Однако в таблице «Места» (seats) первичный ключ является составным и включает два столбца.
+Напишите команду INSERT для вставки новой строки в эту таблицу и предусмотрите возможный конфликт добавляемой строки со строкой, уже имеющейся в таблице.
+Сделайте два варианта предложения ON CONFLICT: первый — с использованием перечисления имен столбцов для проверки наличия дублирования, второй — с использованием предложения ON CONSTRAINT. Для того чтобы не изменить содержимое таблицы «Места», создайте ее копию и выполняйте все эти эксперименты с таблицей-копией.
+
+Для выполнения задания сделаем еще одну такую же таблицу
+
+```sql
+demo=# CREATE TEMP TABLE seats_tmp
+demo-# AS SELECT * FROM SEATS;
+SELECT 1339
+demo=# ALTER TABLE seats_tmp
+demo-# ADD PRIMARY KEY (aircraft_code, seat_no);
+ALTER TABLE
+
+demo=# \d seats_tmp
+                                  Таблица "pg_temp_3.seats_tmp"
+     Столбец     |          Тип          | Правило сортировки | Допустимость NULL | По умолчанию
+-----------------+-----------------------+--------------------+-------------------+
+ aircraft_code   | character(3)          |                    | not null          |
+ seat_no         | character varying(4)  |                    | not null          |
+ fare_conditions | character varying(10) |                    |                   |
+Индексы:
+    "seats_tmp_pkey" PRIMARY KEY, btree (aircraft_code, seat_no)
+
+demo=# INSERT INTO seats_tmp
+demo-# SELECT aircraft_code, seat_no, fare_conditions
+demo-# FROM seats ON CONFLICT DO NOTHING;
+INSERT 0 0
+
+demo=# INSERT INTO seats_tmp
+demo-# VALUES ( 319, '2A', 'Business' )
+demo-# ON CONFLICT ON CONSTRAINT seats_tmp_pkey
+demo-# DO UPDATE SET aircraft_code = excluded.aircraft_code,
+demo-# seat_no = excluded.seat_no
+demo-# RETURNING *;
+ aircraft_code | seat_no | fare_conditions
+---------------+---------+-----------------
+ 319           | 2A      | Business
+(1 строка)
+```
+
 [Наверх](#ссылки)
 
 ---
