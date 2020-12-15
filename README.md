@@ -720,6 +720,324 @@ demo=# SELECT * FROM bookings WHERE book_ref='000181';
 
 ### Работа
 
+#### Упражнение 2
+
+Этот запрос выбирает из таблицы «Билеты» (tickets) всех пассажиров с именами, состоящими из трех букв (в шаблоне присутствуют три символа «_»): 
+
+```sql
+SELECT passenger_name
+FROM tickets
+WHERE passenger_name LIKE '___ %';
+```
+
+Предложите шаблон поиска в операторе LIKE для выбора из этой таблицы всех пассажиров с фамилиями, состоящими из пяти букв.
+
+```sql
+demo=# SELECT passenger_name
+demo-# FROM tickets
+demo-# WHERE passenger_name LIKE '_____ %';
+   passenger_name
+--------------------
+ ALENA ABRAMOVA
+ ALENA ABRAMOVA
+ ALENA ABRAMOVA
+ ALENA ABRAMOVA
+ ALENA ABRAMOVA
+ ALENA AFANASEVA
+ ALENA AFANASEVA
+ ALENA AFANASEVA
+ ALENA AFANASEVA
+```
+
+#### Упражнение 7
+
+Самые крупные самолеты в нашей авиакомпании — это Boeing 777-300. Выяснить, между какими парами городов они летают, поможет запрос: 
+
+```sql
+SELECT DISTINCT departure_city, arrival_city
+FROM routes r
+JOIN aircrafts a ON r.aircraft_code = a.aircraft_code
+WHERE a.model = 'Boeing 777-300'
+ORDER BY 1;
+```
+
+Модифицируйте запрос таким образом, чтобы каждая пара городов была выведена только один раз
+
+```sql
+demo=# SELECT DISTINCT r.departure_city, r.arrival_city
+demo-# FROM routes r
+demo-# JOIN routes rr ON r.arrival_city = rr.departure_city
+demo-# AND rr.arrival_city = r.departure_city and r.arrival_city > rr.arrival_city
+demo-# JOIN aircrafts a ON r.aircraft_code = a.aircraft_code
+demo-# WHERE a.model = 'Boeing 777-300'
+demo-# ORDER BY 1;
+ departure_city | arrival_city
+----------------+--------------
+ Екатеринбург   | Москва
+ Москва         | Новосибирск
+ Москва         | Пермь
+ Москва         | Сочи
+(4 строки)
+```
+
+#### Упражнение 9
+
+Для ответа на вопрос, сколько рейсов выполняется из Москвы в Санкт-Петербург, можно написать совсем простой запрос: 
+
+```sql
+SELECT count( * )
+FROM routes
+WHERE departure_city = 'Москва'
+AND arrival_city = 'Санкт-Петербург'
+```
+
+А с помощью какого запроса можно получить результат в таком виде?
+
+```sql
+ departure_city |  arrival_city   | count
+----------------+-----------------+-------
+ Москва         | Санкт-Петербург |    12
+
+demo=# SELECT  departure_city, arrival_city, count(*)
+demo-# FROM routes
+demo-# WHERE departure_city = 'Москва'
+demo-# AND arrival_city = 'Санкт-Петербург'
+demo-# GROUP BY departure_city, arrival_city;
+ departure_city |  arrival_city   | count
+----------------+-----------------+-------
+ Москва         | Санкт-Петербург |    12
+(1 строка)
+```
+
+#### Упражнение 13
+
+Ответить на вопрос о том, каковы максимальные и минимальные цены билетов на все направления, может такой запрос: 
+
+```sql
+SELECT
+f.departure_city,
+f.arrival_city,
+max( tf.amount ),
+min( tf.amount )
+FROM flights_v f
+JOIN ticket_flights tf ON f.flight_id = tf.flight_id
+GROUP BY 1, 2
+ORDER BY 1, 2;
+```
+
+А как выявить те направления, на которые не было продано ни одного билета?
+
+```sql
+demo=# SELECT
+demo-# f.departure_city,
+demo-# f.arrival_city,
+demo-# max( tf.amount ),
+demo-# min( tf.amount )
+demo-# FROM flights_v f
+demo-# LEFT JOIN ticket_flights tf ON f.flight_id = tf.flight_id
+demo-# GROUP BY 1, 2
+demo-# ORDER BY 1, 2;
+
+      departure_city      |       arrival_city       |    max    |   min
+--------------------------+--------------------------+-----------+----------
+ Абакан                   | Архангельск              |           |
+ Абакан                   | Грозный                  |           |
+ Абакан                   | Кызыл                    |           |
+ Абакан                   | Москва                   | 101000.00 | 33700.00
+ Абакан                   | Новосибирск              |   5800.00 |  5800.00
+ Абакан                   | Томск                    |   4900.00 |  4900.00
+ Анадырь                  | Москва                   | 185300.00 | 61800.00
+ Анадырь                  | Хабаровск                |  92200.00 | 30700.00
+ Анапа                    | Белгород                 |  18900.00 |  6300.00
+ Анапа                    | Москва                   |  36600.00 | 12200.00
+```
+
+#### Упражнение 19
+
+В разделе 6.4 мы использовали рекурсивный алгоритм в общем табличном выражении. Изучите этот пример, чтобы лучше понять работу рекурсивного алгоритма:
+
+```sql
+WITH RECURSIVE ranges ( min_sum, max_sum )
+AS (
+VALUES( 0, 100000 ),
+( 100000, 200000 ),
+( 200000, 300000 )
+UNION ALL
+SELECT min_sum + 100000, max_sum + 100000
+FROM ranges
+WHERE max_sum < ( SELECT max( total_amount ) FROM bookings )
+)
+SELECT * FROM ranges;
+```
+
+##### Задание 1
+
+Модифицируйте запрос, добавив в него столбец level (можно назвать его и iteration). Этот столбец должен содержать номер текущей итерации, поэтому нужно увеличивать его значение на единицу на каждом шаге. Не забудьте задать начальное значение для добавленного столбца в предложении VALUES.
+
+```sql
+demo=# WITH RECURSIVE ranges ( min_sum, max_sum, iter )
+demo-# AS (
+demo(# VALUES( 0, 100000, 1 ),
+demo(# ( 100000, 200000, 1 ),
+demo(# ( 200000, 300000, 1 )
+demo(# UNION ALL
+demo(# SELECT min_sum + 100000, max_sum + 100000 , iter + 1
+demo(# FROM ranges
+demo(# WHERE max_sum < ( SELECT max( total_amount ) FROM bookings )
+demo(# )
+demo-# SELECT * FROM ranges;
+ min_sum | max_sum | iter
+---------+---------+------
+       0 |  100000 |    1
+  100000 |  200000 |    1
+  200000 |  300000 |    1
+  100000 |  200000 |    2
+  200000 |  300000 |    2
+  300000 |  400000 |    2
+  200000 |  300000 |    3
+  300000 |  400000 |    3
+  400000 |  500000 |    3
+  300000 |  400000 |    4
+  400000 |  500000 |    4
+  500000 |  600000 |    4
+  400000 |  500000 |    5
+  500000 |  600000 |    5
+  600000 |  700000 |    5
+```
+
+##### Задание 2
+
+Для завершения экспериментов замените UNION ALL на UNION и выполните запрос. Сравните этот результат с предыдущим, когда мы использовали UNION ALL.
+
+```sql
+demo=# WITH RECURSIVE ranges ( min_sum, max_sum )
+demo-# AS (
+demo(# VALUES( 0, 100000 ),
+demo(# ( 100000, 200000 ),
+demo(# ( 200000, 300000 )
+demo(# UNION
+demo(# SELECT min_sum + 100000, max_sum + 100000
+demo(# FROM ranges
+demo(# WHERE max_sum < ( SELECT max( total_amount ) FROM bookings )
+demo(# )
+demo-# SELECT * FROM ranges;
+ min_sum | max_sum
+---------+---------
+       0 |  100000
+  100000 |  200000
+  200000 |  300000
+  300000 |  400000
+  400000 |  500000
+  500000 |  600000
+  600000 |  700000
+  700000 |  800000
+  800000 |  900000
+  900000 | 1000000
+ 1000000 | 1100000
+ 1100000 | 1200000
+ 1200000 | 1300000
+(13 строк)
+```
+
+#### Упражнение 21
+
+В тексте главы был приведен запрос, выводящий список городов, в которые нет рейсов из Москвы.
+
+```sql
+SELECT DISTINCT a.city
+FROM airports a
+WHERE NOT EXISTS (
+SELECT * FROM routes r
+WHERE r.departure_city = 'Москва'
+AND r.arrival_city = a.city
+)
+AND a.city <> 'Москва'
+ORDER BY city;
+```
+
+Можно предложить другой вариант, в котором используется одна из операций над множествами строк: объединение, пересечение или разность.
+Вместо знака «?» поставьте в приведенном ниже запросе нужное ключевое слово — UNION, INTERSECT или EXCEPT — и обоснуйте ваше решение.
+
+```sql
+SELECT city
+FROM airports
+WHERE city <> 'Москва'
+?
+SELECT arrival_city
+FROM routes
+WHERE departure_city = 'Москва'
+ORDER BY city;
+```
+
+Будем использовать EXCEPT, потому что требуется исключить те города, в которые нет рейсов из Москвы.
+
+#### Упражнение 22
+
+В тексте главы мы рассматривали такой запрос: получить перечень аэропортов в тех городах, в которых больше одного аэропорта.
+
+```sql
+SELECT aa.city, aa.airport_code, aa.airport_name
+FROM (
+SELECT city, count( * )
+FROM airports
+GROUP BY city
+HAVING count( * ) > 1
+) AS a
+JOIN airports AS aa ON a.city = aa.city
+ORDER BY aa.city, aa.airport_name;
+```
+
+Как вы думаете, обязательно ли наличие функции count в подзапросе в предложении SELECT или можно написать просто SELECT city FROM airports ?
+
+ - Да, обязательно, так как без count выведутся только те города, в которых имеется только один аэропорт.
+
+```sql
+demo=# SELECT aa.city, aa.airport_code, aa.airport_name, count
+demo-# FROM (
+demo(# SELECT city, count( * ) as count
+demo(# FROM airports
+demo(# GROUP BY city
+demo(# ) AS a
+demo-# JOIN airports AS aa ON a.city = aa.city
+demo-# ORDER BY aa.city, aa.airport_name;
+           city           | airport_code |     airport_name     | count
+--------------------------+--------------+----------------------+-------
+ Абакан                   | ABA          | Абакан               |     1
+ Анадырь                  | DYR          | Анадырь              |     1
+ Анапа                    | AAQ          | Витязево             |     1
+ Архангельск              | ARH          | Талаги               |     1
+ Астрахань                | ASF          | Астрахань            |     1
+ Барнаул                  | BAX          | Барнаул              |     1
+ Белгород                 | EGO          | Белгород             |     1
+ Белоярский               | EYK          | Белоярский           |     1
+ Благовещенск             | BQS          | Игнатьево            |     1
+ Братск                   | BTK          | Братск               |     1
+ Брянск                   | BZK          | Брянск               |     1
+ Бугульма                 | UUA          | Бугульма             |     1
+```
+
+#### Упражнение 23
+
+Предположим, что департамент развития нашей авиакомпании задался вопросом: каким будет общее число различных маршрутов, которые теоретически можно проложить между всеми городами? Если в каком-то городе имеется более одного аэропорта, то это учитывать не будем, т. е. маршрутом будем считать путь между городами, а не между аэропортами. Здесь мы используем соединение таблицы с самой собой на основе неравенства значений атрибутов.
+
+```sql
+SELECT count( * )
+FROM ( SELECT DISTINCT city FROM airports ) AS a1
+JOIN ( SELECT DISTINCT city FROM airports ) AS a2
+ON a1.city <> a2.city;
+```
+
+Перепишите этот запрос с общим табличным выражением.
+
+```sql
+WITH city_from AS
+( SELECT DISTINCT city FROM airports )
+SELECT count( * )
+FROM city_from f
+JOIN ( SELECT DISTINCT city FROM airports ) AS a2
+ON f.city <> a2.city;
+```
+
 [Наверх](#ссылки)
 
 ---
