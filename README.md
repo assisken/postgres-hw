@@ -734,18 +734,31 @@ WHERE passenger_name LIKE '___ %';
 ```sql
 demo=# SELECT passenger_name
 demo-# FROM tickets
-demo-# WHERE passenger_name LIKE '_____ %';
+demo-# WHERE passenger_name LIKE '% _____';
    passenger_name
 --------------------
- ALENA ABRAMOVA
- ALENA ABRAMOVA
- ALENA ABRAMOVA
- ALENA ABRAMOVA
- ALENA ABRAMOVA
- ALENA AFANASEVA
- ALENA AFANASEVA
- ALENA AFANASEVA
- ALENA AFANASEVA
+   passenger_name  
+------------------
+ ILYA POPOV
+ VLADIMIR POPOV
+ PAVEL GUSEV
+ LEONID ORLOV
+ EVGENIY GUSEV
+ NIKOLAY FOMIN
+ EKATERINA ILINA
+ ANTON POPOV
+ ARTEM BELOV
+ VLADIMIR POPOV
+ ALEKSEY ISAEV
+ ...
+
+demo=# SELECT count(passenger_name)
+demo=# FROM tickets
+demo=# WHERE passenger_name LIKE '% _____';
+ count 
+-------
+ 14272
+(1 row)
 ```
 
 #### Упражнение 7
